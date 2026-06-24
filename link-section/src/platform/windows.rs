@@ -153,6 +153,7 @@ crate::__def_section_name! {
 
 /// Linker-visible provenance donor for Windows.
 #[doc(hidden)]
+#[macro_export]
 macro_rules! __ls_provenance_symbol {
     () => {
         concat!(
