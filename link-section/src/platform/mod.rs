@@ -22,48 +22,6 @@ pub use {wasm::Bounds, wasm::MovableBounds};
 #[cfg(not(target_family = "wasm"))]
 pub use {PtrBounds as Bounds, PtrMovableBounds as MovableBounds};
 
-/// Linker-visible provenance donor for Windows.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __ls_provenance_symbol {
-    () => {
-        concat!(
-            "__ls_prov_",
-            env!("CARGO_CRATE_NAME"),
-            "_",
-            env!("CARGO_PKG_VERSION_MAJOR"),
-            "_",
-            env!("CARGO_PKG_VERSION_MINOR"),
-            "_",
-            env!("CARGO_PKG_VERSION_PATCH"),
-        )
-    };
-}
-
-#[cfg(all(target_os = "windows", not(miri)))]
-core::arch::global_asm!(core::concat!(
-    // read-only
-    ".section .rdata$",
-    crate::__ls_provenance_symbol!(),
-    // ..."d" = initialized, "r" = read-only
-    // "discard" = "duplicates OK"
-    ",\"dr\",discard,",
-    crate::__ls_provenance_symbol!(),
-    "\n",
-    ".globl ",
-    crate::__ls_provenance_symbol!(),
-    "\n",
-    crate::__ls_provenance_symbol!(),
-    ":\n",
-    ".byte 0\n",
-));
-
-#[cfg(all(target_os = "windows", not(miri)))]
-unsafe extern "C" {
-    #[link_name = crate::__ls_provenance_symbol!()]
-    static LS_PROVENANCE_DONOR: u8;
-}
-
 /// Rejects section names that cannot be represented on the current target.
 pub const fn validate_section_name(name: &str) {
     if cfg!(target_vendor = "apple") {
@@ -90,20 +48,27 @@ pub fn launder_pointer_provenance<T>(ptr: *const T) -> *const T {
     // exposed provenance and reverts it, which it then traces to the marker allocation which
     // it then believes all slice loads come from.
     //
-    // Treating this provenance round-trip as a no-op is arguably an LLVM optimization issue
-    // somewhere between Rust and LLVM.
+    // Treating this provenance round-trip as a no-op is arguably an LLVM optimization issue.
     #[cfg(all(windows, not(miri)))]
     {
-        core::ptr::addr_of!(LS_PROVENANCE_DONOR).with_addr(ptr.addr()) as *const T
+        unsafe extern "C" {
+            #[link_name = crate::__ls_provenance_symbol!()]
+            static LS_PROVENANCE_DONOR: u8;
+        }
+
+        // Copy provenance from a non-Rust symbol ineligible for many
+        // optimizations to the pointer. It is far less likely for early optimization
+        // passes to fold the pointer into the marker's allocation.
+        (&raw const LS_PROVENANCE_DONOR).with_addr(ptr.addr()) as *const T
     }
 }
 
 /// Constant bounds for a pointer-based section.
 pub struct PtrBounds {
     /// Section start address.
-    pub start: *const (),
+    start: *const (),
     /// One byte past the last section byte.
-    pub end: *const (),
+    end: *const (),
 }
 
 impl PtrBounds {
