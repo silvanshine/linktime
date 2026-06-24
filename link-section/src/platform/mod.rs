@@ -52,7 +52,40 @@ pub fn launder_pointer_provenance<T>(ptr: *const T) -> *const T {
     // somewhere between Rust and LLVM.
     #[cfg(windows)]
     {
-        core::hint::black_box(core::ptr::with_exposed_provenance(ptr.expose_provenance()))
+        const _: () = {
+            mod ls_prov_v {
+                core::arch::global_asm!(core::concat!(
+                    ".section .rdata$__ls_prov_",
+                    env!("CARGO_PKG_NAME"),
+                    "v",
+                    env!("CARGO_PKG_VERSION"),
+                    ",\"dr\",discard,__ls_prov_",
+                    env!("CARGO_PKG_NAME"),
+                    "v",
+                    env!("CARGO_PKG_VERSION"),
+                    "\n",
+                    ".globl __ls_prov_",
+                    env!("CARGO_PKG_NAME"),
+                    "v",
+                    env!("CARGO_PKG_VERSION"),
+                    "\n",
+                    "__ls_prov_",
+                    env!("CARGO_PKG_NAME"),
+                    "v",
+                    env!("CARGO_PKG_VERSION"),
+                    ":\n",
+                    ".byte 0\n",
+                ));
+            }
+        };
+
+        extern "C" {
+            #[link_name = concat!("__ls_prov_", env!("CARGO_PKG_NAME"), "v", env!("CARGO_PKG_VERSION"))]
+            static PROVENANCE_MARKER: u8;
+        }
+
+        // We borrow the raw pointer's provenance to give it completely-exposed provenance.
+        (&raw const PROVENANCE_MARKER).with_addr(ptr.addr()) as *const T
     }
 }
 
