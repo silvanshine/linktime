@@ -1,6 +1,6 @@
 //! Shared types and link sections for the `copied` integration test.
 
-use link_section::{in_section, section};
+use link_section::section;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ComplexType {

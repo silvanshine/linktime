@@ -1,6 +1,6 @@
 //! Registrations for the `copied` integration test (crate B).
 
-use copied_types::{ComplexType, MUT_LINK_SECTION, OTHER_TYPE, OTHER_TYPE_2, VALUES};
+use copied_types::{ComplexType, IMMUTABLE_LINK_SECTION, MUT_LINK_SECTION, OTHER_TYPE, OTHER_TYPE_2, VALUES};
 use link_section::in_section;
 
 #[in_section(VALUES)]
