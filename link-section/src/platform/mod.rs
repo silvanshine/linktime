@@ -22,6 +22,45 @@ pub use {wasm::Bounds, wasm::MovableBounds};
 #[cfg(not(target_family = "wasm"))]
 pub use {PtrBounds as Bounds, PtrMovableBounds as MovableBounds};
 
+/// Linker-visible provenance donor for Windows.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __ls_provenance_symbol {
+    () => {
+        concat!(
+            "__ls_prov_",
+            env!("CARGO_CRATE_NAME"),
+            "_",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            "_",
+            env!("CARGO_PKG_VERSION_MINOR"),
+            "_",
+            env!("CARGO_PKG_VERSION_PATCH"),
+        )
+    };
+}
+
+#[cfg(all(target_os = "windows", not(miri)))]
+core::arch::global_asm!(core::concat!(
+    ".section .rdata$",
+    crate::__ls_provenance_symbol!(),
+    ",\"dr\",discard,",
+    crate::__ls_provenance_symbol!(),
+    "\n",
+    ".globl ",
+    crate::__ls_provenance_symbol!(),
+    "\n",
+    crate::__ls_provenance_symbol!(),
+    ":\n",
+    ".byte 0\n",
+));
+
+#[cfg(all(target_os = "windows", not(miri)))]
+extern "C" {
+    #[link_name = crate::__ls_provenance_symbol!()]
+    static LS_PROVENANCE_DONOR: u8;
+}
+
 /// Rejects section names that cannot be represented on the current target.
 pub const fn validate_section_name(name: &str) {
     if cfg!(target_vendor = "apple") {
@@ -38,7 +77,7 @@ pub const fn validate_section_name(name: &str) {
 
 /// Launder a pointer's provenance so it appears as an "exposed" pointer.
 pub fn launder_pointer_provenance<T>(ptr: *const T) -> *const T {
-    #[cfg(not(windows))]
+    #[cfg(any(not(windows), miri))]
     {
         core::ptr::with_exposed_provenance(ptr.expose_provenance())
     }
@@ -50,42 +89,9 @@ pub fn launder_pointer_provenance<T>(ptr: *const T) -> *const T {
     //
     // Treating this provenance round-trip as a no-op is arguably an LLVM optimization issue
     // somewhere between Rust and LLVM.
-    #[cfg(windows)]
+    #[cfg(all(windows, not(miri)))]
     {
-        const _: () = {
-            mod ls_prov_v {
-                core::arch::global_asm!(core::concat!(
-                    ".section .rdata$__ls_prov_",
-                    env!("CARGO_PKG_NAME"),
-                    "v",
-                    env!("CARGO_PKG_VERSION"),
-                    ",\"dr\",discard,__ls_prov_",
-                    env!("CARGO_PKG_NAME"),
-                    "v",
-                    env!("CARGO_PKG_VERSION"),
-                    "\n",
-                    ".globl __ls_prov_",
-                    env!("CARGO_PKG_NAME"),
-                    "v",
-                    env!("CARGO_PKG_VERSION"),
-                    "\n",
-                    "__ls_prov_",
-                    env!("CARGO_PKG_NAME"),
-                    "v",
-                    env!("CARGO_PKG_VERSION"),
-                    ":\n",
-                    ".byte 0\n",
-                ));
-            }
-        };
-
-        extern "C" {
-            #[link_name = concat!("__ls_prov_", env!("CARGO_PKG_NAME"), "v", env!("CARGO_PKG_VERSION"))]
-            static PROVENANCE_MARKER: u8;
-        }
-
-        // We borrow the raw pointer's provenance to give it completely-exposed provenance.
-        (&raw const PROVENANCE_MARKER).with_addr(ptr.addr()) as *const T
+        core::ptr::addr_of!(LS_PROVENANCE_DONOR).with_addr(ptr.addr()) as *const T
     }
 }
 
