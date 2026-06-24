@@ -42,8 +42,11 @@ macro_rules! __ls_provenance_symbol {
 
 #[cfg(all(target_os = "windows", not(miri)))]
 core::arch::global_asm!(core::concat!(
+    // read-only
     ".section .rdata$",
     crate::__ls_provenance_symbol!(),
+    // ..."d" = initialized, "r" = read-only
+    // "discard" = "duplicates OK"
     ",\"dr\",discard,",
     crate::__ls_provenance_symbol!(),
     "\n",
@@ -56,7 +59,7 @@ core::arch::global_asm!(core::concat!(
 ));
 
 #[cfg(all(target_os = "windows", not(miri)))]
-extern "C" {
+unsafe extern "C" {
     #[link_name = crate::__ls_provenance_symbol!()]
     static LS_PROVENANCE_DONOR: u8;
 }
