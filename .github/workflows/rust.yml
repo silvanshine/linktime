@@ -29,6 +29,9 @@ jobs:
               $match:
                 # i686 host toolchain
                 "this.label == 'linux-x86'": stable-i686-unknown-linux-gnu
+                # Pin the oldest compiler whose proc_macro span paths are buggy
+                # for cross-crate sections (fixed in 1.94); guards the workaround.
+                "this.label == 'linux-188'": "1.88"
                 "this.job == 'miri'": nightly
                 "this.job == 'lint'": [stable, nightly]
                 "this.job == 'test-used-linker'": nightly
@@ -63,6 +66,10 @@ jobs:
                 os: ubuntu-latest
                 job: test
                 target: i686-unknown-linux-gnu
+              linux-188:
+                os: ubuntu-latest
+                job: test
+                target: x86_64-unknown-linux-gnu
               macos:
                 os: macOS-latest
                 job: [lint, test, test-used-linker, miri, zigbuild, sanitize, build-minimal]
